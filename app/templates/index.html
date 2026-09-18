@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card upload">
+  <h1>Add a receipt</h1>
+  <form action="/upload" method="post" enctype="multipart/form-data" id="upload-form">
+    <input type="file" name="file" accept="image/*" capture="environment" required>
+    <input type="text" name="notes" placeholder="Note (optional)">
+    <button type="submit">Read receipt</button>
+  </form>
+  <p class="hint">
+    The photo goes to <strong>{{ model }}</strong> on your own machine. Nothing leaves it.
+    A local vision model can take a minute or two per receipt.
+  </p>
+  <p class="spinner" id="spinner" hidden>Reading the receipt&hellip; leave this tab open.</p>
+</section>
+
+<section class="card">
+  <div class="list-head">
+    <h2>{{ receipts|length }} receipt{{ '' if receipts|length == 1 else 's' }}</h2>
+    <form method="get" action="/" class="search">
+      <input type="search" name="q" value="{{ query }}" placeholder="Search merchant, note, category">
+      <button type="submit">Search</button>
+      {% if query %}<a class="clear" href="/">Clear</a>{% endif %}
+    </form>
+  </div>
+
+  {% if receipts %}
+  <table class="receipts">
+    <thead>
+      <tr><th></th><th>Date</th><th>Merchant</th><th>Category</th><th class="num">Items</th><th class="num">Total</th></tr>
+    </thead>
+    <tbody>
+      {% for r in receipts %}
+      <tr onclick="location='/receipts/{{ r.id }}'">
+        <td class="thumb-cell"><img src="/images/{{ r.image_id }}?thumb=true" alt="" loading="lazy"></td>
+        <td>{{ r.purchased_on or '—' }}</td>
+        <td>
+          <a href="/receipts/{{ r.id }}">{{ r.merchant or 'Unnamed receipt' }}</a>
+          {% if r.extraction_error %}<span class="pill warn">not read</span>{% endif %}
+        </td>
+        <td>{{ r.category or '—' }}</td>
+        <td class="num">{{ r.item_count }}</td>
+        <td class="num">{{ r.currency or '' }} {{ r.total|money }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr><td colspan="5">Total on this page</td><td class="num">{{ grand_total|money }}</td></tr>
+    </tfoot>
+  </table>
+  {% else %}
+  <p class="empty">Nothing stored yet. Upload a photo above to get started.</p>
+  {% endif %}
+</section>
+
+<script>
+  document.getElementById('upload-form').addEventListener('submit', function () {
+    document.getElementById('spinner').hidden = false;
+    this.querySelector('button').disabled = true;
+    this.querySelector('button').textContent = 'Working…';
+  });
+</script>
+{% endblock %}

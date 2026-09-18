@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Model · Receipt Parser{% endblock %}
+{% block content %}
+<a class="back" href="/">&larr; All receipts</a>
+<section class="card">
+  <h1>LM Studio</h1>
+  <p>Endpoint: <code>{{ base_url }}</code></p>
+  <p>Configured model: <code>{{ configured }}</code>
+    {% if error %}
+      <span class="pill warn">unreachable</span>
+    {% elif configured_is_available %}
+      <span class="pill ok">loaded</span>
+    {% else %}
+      <span class="pill warn">not being served</span>
+    {% endif %}
+  </p>
+
+  {% if error %}
+    <div class="banner error">{{ error }}</div>
+  {% elif available %}
+    <p>Models this server is serving right now:</p>
+    <ul class="models">
+      {% for name in available %}
+      <li><code>{{ name }}</code>{% if name == configured %} <span class="pill ok">in use</span>{% endif %}</li>
+      {% endfor %}
+    </ul>
+    {% if not configured_is_available %}
+    <p class="hint">Copy the right identifier above into <code>LMSTUDIO_MODEL</code> in your
+      <code>.env</code>, then restart the app. It must be a <strong>vision</strong> model —
+      a text-only model will reject the image.</p>
+    {% endif %}
+  {% else %}
+    <p class="hint">The server answered but is serving no models. Load one in LM Studio.</p>
+  {% endif %}
+</section>
+{% endblock %}

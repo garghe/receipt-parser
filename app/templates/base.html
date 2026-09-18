@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Receipt Parser{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>&#129534;</text></svg>">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">Receipt Parser</a>
+    <nav>
+      <a href="/export/receipts.csv">Receipts CSV</a>
+      <a href="/export/line-items.csv">Items CSV</a>
+      <a href="/models">Model</a>
+    </nav>
+  </header>
+  <main>
+    {% if error %}<div class="banner error">{{ error }}</div>{% endif %}
+    {% if notice %}<div class="banner notice">{{ notice }}</div>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

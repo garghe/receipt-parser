@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}{{ receipt.merchant or 'Receipt' }} · Receipt Parser{% endblock %}
+{% block content %}
+<a class="back" href="/">&larr; All receipts</a>
+
+{% if receipt.extraction_error %}
+<div class="banner error">
+  <strong>The model could not read this one.</strong> {{ receipt.extraction_error }}
+  The photo is saved, so you can fix LM Studio and re-read it, or type the details in by hand.
+</div>
+{% endif %}
+{% if warning %}<div class="banner warn">{{ warning }}</div>{% endif %}
+
+<div class="detail">
+  <section class="card photo">
+    <a href="/images/{{ receipt.image_id }}" target="_blank" rel="noopener">
+      <img src="/images/{{ receipt.image_id }}" alt="Receipt photo">
+    </a>
+    <p class="hint">{{ receipt.filename or 'photo' }} · {{ receipt.width }}×{{ receipt.height }} ·
+      {{ (receipt.byte_size / 1024)|round|int }} KB</p>
+  </section>
+
+  <section class="card">
+    <form method="post" action="/receipts/{{ receipt.id }}">
+      <h2>Details</h2>
+      <div class="grid">
+        <label>Merchant<input name="merchant" value="{{ receipt.merchant or '' }}"></label>
+        <label>Category<input name="category" value="{{ receipt.category or '' }}" list="categories">
+          <datalist id="categories">
+            <option>groceries</option><option>restaurant</option><option>transport</option>
+            <option>fuel</option><option>travel</option><option>retail</option>
+            <option>health</option><option>utilities</option><option>other</option>
+          </datalist>
+        </label>
+        <label>Date<input name="purchased_on" type="date" value="{{ receipt.purchased_on or '' }}"></label>
+        <label>Time<input name="purchased_at" type="time" value="{{ receipt.purchased_at or '' }}"></label>
+        <label>Currency<input name="currency" value="{{ receipt.currency or '' }}" maxlength="3"></label>
+        <label>Payment<input name="payment_method" value="{{ receipt.payment_method or '' }}"></label>
+        <label>Subtotal<input name="subtotal" inputmode="decimal" value="{{ receipt.subtotal|money }}"></label>
+        <label>Tax / VAT<input name="tax" inputmode="decimal" value="{{ receipt.tax|money }}"></label>
+        <label>Tip<input name="tip" inputmode="decimal" value="{{ receipt.tip|money }}"></label>
+        <label>Total<input name="total" inputmode="decimal" value="{{ receipt.total|money }}"></label>
+        <label class="wide">Address<input name="merchant_address" value="{{ receipt.merchant_address or '' }}"></label>
+        <label>VAT number<input name="merchant_vat_id" value="{{ receipt.merchant_vat_id or '' }}"></label>
+        <label class="wide">Note<input name="notes" value="{{ receipt.notes or '' }}"></label>
+      </div>
+
+      <h2>Line items</h2>
+      <table class="items" id="items">
+        <thead>
+          <tr><th>Description</th><th class="num">Qty</th><th class="num">Unit</th><th class="num">Total</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for item in line_items %}
+          <tr>
+            <td><input name="item_description" value="{{ item.description or '' }}"></td>
+            <td><input name="item_quantity" inputmode="decimal" value="{{ item.quantity if item.quantity is not none else '' }}"></td>
+            <td><input name="item_unit_price" inputmode="decimal" value="{{ item.unit_price|money }}"></td>
+            <td><input name="item_line_total" inputmode="decimal" value="{{ item.line_total|money }}"></td>
+            <td><button type="button" class="link remove">remove</button></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <button type="button" class="secondary" id="add-row">Add a line</button>
+
+      <div class="actions">
+        <button type="submit">Save changes</button>
+      </div>
+    </form>
+
+    <div class="actions secondary-actions">
+      <form method="post" action="/receipts/{{ receipt.id }}/reextract">
+        <button type="submit" class="secondary">Read again with the model</button>
+      </form>
+      <form method="post" action="/receipts/{{ receipt.id }}/delete"
+            onsubmit="return confirm('Delete this receipt and its photo?')">
+        <button type="submit" class="danger">Delete</button>
+      </form>
+    </div>
+
+    <details class="raw">
+      <summary>What the model returned ({{ receipt.model or 'unknown model' }})</summary>
+      <pre>{{ receipt.raw_response or '—' }}</pre>
+    </details>
+  </section>
+</div>
+
+<template id="row-template">
+  <tr>
+    <td><input name="item_description"></td>
+    <td><input name="item_quantity" inputmode="decimal"></td>
+    <td><input name="item_unit_price" inputmode="decimal"></td>
+    <td><input name="item_line_total" inputmode="decimal"></td>
+    <td><button type="button" class="link remove">remove</button></td>
+  </tr>
+</template>
+
+<script>
+  const tbody = document.querySelector('#items tbody');
+  document.getElementById('add-row').addEventListener('click', () => {
+    tbody.appendChild(document.getElementById('row-template').content.cloneNode(true));
+  });
+  tbody.addEventListener('click', (event) => {
+    if (event.target.classList.contains('remove')) event.target.closest('tr').remove();
+  });
+</script>
+{% endblock %}
