@@ -96,7 +96,7 @@ All in `.env` (see `.env.example`):
 | `LMSTUDIO_MODEL` | `google/gemma-4-12b` | must match what `/models` reports |
 | `LMSTUDIO_TIMEOUT` | `300` | seconds; local vision models are slow |
 | `DATABASE_PATH` | `receipts.db` | relative paths resolve next to this README |
-| `DATE_ORDER` | `day` | `day` for UK/EU receipts, `month` for US |
+| `DATE_ORDER` | `day` | fallback only, for when the model can't tell the order |
 | `MAX_IMAGE_EDGE` | `1600` | longest edge sent to the model; smaller is faster but loses small print |
 
 Change the host or port with `HOST` and `PORT`; set `RELOAD=1` while developing.
@@ -113,6 +113,26 @@ Two details drive the design of `app/extractor.py`:
    `app/parsing.py`, which digs the JSON out of code fences or surrounding
    prose and coerces the values — `£12.50`, `12,50` and `1.234,56` all land as
    floats, and dates are read in the order `DATE_ORDER` specifies.
+
+### Dates
+
+Dates are where a local model most often goes wrong, so they get special
+handling. The prompt tells it where on a receipt the purchase date usually sits
+(beside the time, the till number or the word TOTAL), lists the dates that are
+*not* the purchase date (card expiry, best-before, return-by, loyalty join
+date), and insists it copy the digits verbatim rather than reformatting them.
+
+It also asks the model to report the order the receipt uses in a `date_format`
+field — `DMY`, `MDY`, `YMD`, `TEXT` or `UNKNOWN`. The model is looking at the
+receipt and we are not, so when it commits to `DMY` or `MDY` that decides how
+`03/04/25` is read. `DATE_ORDER` in `.env` is only the fallback for when it
+answers `UNKNOWN` or says nothing.
+
+Parsing then absorbs the shapes models return in practice: a time attached to
+the date (`17/09/2026 18:42`), ISO timestamps with `T` and a timezone, weekday
+prefixes, months spelled out with any separator (`17-SEP-2026`), and Italian
+month names (`17 SET 2026`). A date that can't be read confidently is stored as
+empty rather than guessed — the detail page lets you type it in.
 
 If the model can't be reached or returns nothing usable, **the photo is still
 saved**. The receipt appears in the list marked "not read", and you can either
@@ -151,6 +171,6 @@ sqlite3 receipts.db "SELECT purchased_on, merchant, total FROM receipts ORDER BY
 .venv/bin/python -m pytest
 ```
 
-56 tests covering amount/date/time parsing, JSON recovery from messy model
+92 tests covering amount/date/time parsing, JSON recovery from messy model
 output, the schema-rejection fallback, and the upload → store → edit → export
 round trip. LM Studio is stubbed out, so the suite runs without it.

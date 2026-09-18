@@ -145,6 +145,41 @@ _DATE_PATTERNS = (
     "%d %b %y",
 )
 
+# Month names as receipts print them, English and Italian. Keyed by the first
+# three or four letters, which is enough to tell them apart.
+_MONTHS = {
+    "jan": 1, "gen": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "mag": 5,
+    "jun": 6, "giu": 6, "jul": 7, "lug": 7, "aug": 8, "ago": 8,
+    "sep": 9, "set": 9, "sett": 9, "oct": 10, "ott": 10,
+    "nov": 11, "dec": 12, "dic": 12,
+}
+
+# Stripped before parsing: a time of purchase printed alongside the date, an
+# English weekday, a UTC marker.
+_TIME_FRAGMENT = re.compile(r"\b\d{1,2}:\d{2}(?::\d{2})?\s*(?:[AP]\.?M\.?)?", re.IGNORECASE)
+_WEEKDAY = re.compile(
+    r"\b(?:mon|tues?|wed(?:nes)?|thur?s?|fri|sat(?:ur)?|sun)(?:day)?\b\.?", re.IGNORECASE
+)
+_SEPARATOR = r"[\s\-/.,]+"
+_DAY_MONTH_YEAR = re.compile(rf"^(\d{{1,2}}){_SEPARATOR}([A-Za-z]{{3,9}}){_SEPARATOR}(\d{{2,4}})$")
+_MONTH_DAY_YEAR = re.compile(rf"^([A-Za-z]{{3,9}}){_SEPARATOR}(\d{{1,2}}){_SEPARATOR}(\d{{2,4}})$")
+_NUMERIC_DATE = re.compile(r"^(\d{1,4})[-/.](\d{1,2})[-/.](\d{2,4})$")
+
+# What the model reports in "date_format", mapped to whether the day comes first.
+_FORMAT_HINTS = {"DMY": True, "MDY": False}
+
+
+def resolve_day_first(reported_format: Any, default_day_first: bool) -> bool:
+    """Trust the model's reading of the date order when it committed to one.
+
+    It is looking at the receipt and we are not, so DMY or MDY beats our
+    configured default. YMD needs no hint, and UNKNOWN means it could not tell -
+    both fall back to the default.
+    """
+    if reported_format is None:
+        return default_day_first
+    return _FORMAT_HINTS.get(str(reported_format).strip().upper(), default_day_first)
+
 
 def parse_date(value: Any, day_first: bool = True) -> str | None:
     """Return an ISO date string, or None if we cannot read it confidently."""
@@ -155,28 +190,46 @@ def parse_date(value: Any, day_first: bool = True) -> str | None:
     text = str(value).strip()
     if not text:
         return None
-    text = re.sub(r"(\d)(st|nd|rd|th)\b", r"\1", text, flags=re.IGNORECASE)
-    text = text.replace(",", " ")
-    text = re.sub(r"\s+", " ", text).strip()
 
-    numeric = re.match(r"^(\d{1,4})[-/.](\d{1,2})[-/.](\d{2,4})$", text)
+    text = re.sub(r"(?<=\d)T(?=\d)", " ", text)  # ISO 2026-09-17T18:42
+    # Strip a time printed beside the date, plus any timezone left behind. The
+    # timezone strip only runs when there was a time, because "-2026" in
+    # SEP-17-2026 otherwise looks exactly like a UTC offset.
+    had_time = bool(_TIME_FRAGMENT.search(text))
+    text = _TIME_FRAGMENT.sub(" ", text)
+    if had_time:
+        text = re.sub(r"[+-]\d{2}:?\d{2}\b", " ", text)
+    text = _WEEKDAY.sub(" ", text)
+    text = re.sub(r"\b[Zz]\b", " ", text)
+    text = re.sub(r"(\d)(st|nd|rd|th)\b", r"\1", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s+", " ", text).strip(" ,.-+/")
+    if not text:
+        return None
+
+    numeric = _NUMERIC_DATE.match(text)
     if numeric:
         a, b, c = (int(part) for part in numeric.groups())
         if len(numeric.group(1)) == 4:
             year, month, day = a, b, c
         else:
             year = _expand_year(c)
-            if day_first:
-                day, month = a, b
-            else:
-                month, day = a, b
+            day, month = (a, b) if day_first else (b, a)
             # If the "day" can only be a month, the model swapped them.
             if month > 12 and day <= 12:
                 day, month = month, day
-        try:
-            return date(year, month, day).strftime("%Y-%m-%d")
-        except ValueError:
-            return None
+        return _safe_date(year, month, day)
+
+    for pattern, day_index, month_index in (
+        (_DAY_MONTH_YEAR, 0, 1),
+        (_MONTH_DAY_YEAR, 1, 0),
+    ):
+        match = pattern.match(text)
+        if match:
+            parts = match.groups()
+            month = _month_number(parts[month_index])
+            if month is None:
+                continue
+            return _safe_date(_expand_year(int(parts[2])), month, int(parts[day_index]))
 
     for pattern in _DATE_PATTERNS:
         try:
@@ -184,6 +237,18 @@ def parse_date(value: Any, day_first: bool = True) -> str | None:
         except ValueError:
             continue
     return None
+
+
+def _month_number(name: str) -> int | None:
+    key = name.lower()
+    return _MONTHS.get(key[:4]) or _MONTHS.get(key[:3])
+
+
+def _safe_date(year: int, month: int, day: int) -> str | None:
+    try:
+        return date(year, month, day).strftime("%Y-%m-%d")
+    except ValueError:
+        return None
 
 
 def _expand_year(year: int) -> int:
@@ -227,6 +292,9 @@ def clean_text(value: Any, max_length: int = 500) -> str | None:
 def normalise_extraction(payload: dict[str, Any], day_first: bool = True) -> dict[str, Any]:
     """Map the model's JSON onto our columns, coercing every value."""
     raw_text = json.dumps(payload, ensure_ascii=False)
+
+    # The model read the receipt; if it committed to a date order, prefer it.
+    day_first = resolve_day_first(payload.get("date_format"), day_first)
 
     def pick(*names: str) -> Any:
         for name in names:

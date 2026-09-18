@@ -20,6 +20,8 @@ RECEIPT_SCHEMA: dict[str, Any] = {
         "merchant_address": {"type": ["string", "null"]},
         "merchant_vat_id": {"type": ["string", "null"]},
         "date": {"type": ["string", "null"]},
+        "date_format": {"type": ["string", "null"],
+                        "enum": ["DMY", "MDY", "YMD", "TEXT", "UNKNOWN", None]},
         "time": {"type": ["string", "null"]},
         "currency": {"type": ["string", "null"]},
         "subtotal": {"type": ["number", "null"]},
@@ -41,7 +43,7 @@ RECEIPT_SCHEMA: dict[str, Any] = {
             },
         },
     },
-    "required": ["merchant", "total", "line_items"],
+    "required": ["merchant", "date", "date_format", "total", "line_items"],
 }
 
 PROMPT = """You are reading a photograph of a shop receipt.
@@ -53,7 +55,8 @@ Use these keys:
   merchant          shop or restaurant name
   merchant_address  street address printed on the receipt
   merchant_vat_id   VAT / tax number if printed
-  date              purchase date exactly as printed on the receipt
+  date              the purchase date, copied character for character
+  date_format       which order that date is written in - see below
   time              purchase time as printed
   currency          three-letter code such as GBP, EUR, USD
   subtotal          amount before tax, as a number
@@ -65,8 +68,42 @@ Use these keys:
                     retail, health, utilities, other
   line_items        array of {description, quantity, unit_price, line_total}
 
-Rules:
-- Copy the date exactly as printed; do not reformat or guess it.
+THE DATE MATTERS MOST - read this part carefully.
+
+Where to look: the purchase date is usually in the header above the items, or
+in the footer near the till, transaction or receipt number. It very often sits
+directly beside the time of purchase, so if you can see a time, the date is
+almost certainly next to it.
+
+Do NOT use any of these, which appear on receipts and are not the purchase date:
+  - a card expiry date, often printed as EXP 08/27 or VALID THRU 08/27
+  - a "best before", "use by" or "sell by" date on a food item
+  - a "return by" or "exchange within 30 days" deadline
+  - a loyalty card join date, a VAT period, or an opening-hours line
+If you see several dates, choose the one attached to this purchase - the one
+next to the time, the till number, or the word TOTAL.
+
+Copy it exactly as printed into "date": same digits, same separators, same
+order, same number of year digits. If the receipt says 03/04/25, write
+"03/04/25" - do not expand it, do not reorder it, do not convert it to any
+other format.
+
+Then set "date_format" to the order the receipt uses, as one of exactly these
+strings:
+  "DMY"      day first, as in 17/09/2026 meaning 17 September
+  "MDY"      month first, as in 09/17/2026 meaning 17 September
+  "YMD"      year first, as in 2026-09-17
+  "TEXT"     the month is spelled out, as in 17 SEP 2026
+  "UNKNOWN"  you genuinely cannot tell
+Work it out from evidence on the receipt: a number above 12 in the first or
+second position settles it, and so does the currency or address - a UK or
+European receipt is almost always day-first, a US one month-first. If you are
+guessing, say "UNKNOWN" rather than picking one.
+
+If the date is blurred, cut off, or absent, set both "date" and "date_format"
+to null. A wrong date is worse than no date.
+
+Other rules:
 - Write amounts as plain numbers with a dot for decimals, no currency symbol.
 - Use null for anything you cannot read. Never invent a value.
 - Include every purchased line on the receipt, in the order printed."""

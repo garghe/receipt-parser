@@ -206,5 +206,34 @@ def test_reextract_reruns_the_model(client, photo_bytes, stub_model):
     assert len(stub_model) == 2
 
 
+def test_reported_date_format_flows_through_to_storage(client, photo_bytes, monkeypatch):
+    """A US receipt read by the model must not be stored day-first."""
+    reply = json.dumps(
+        {"merchant": "Blue Bottle", "date": "03/04/2025", "date_format": "MDY",
+         "currency": "USD", "total": 6.5, "line_items": []}
+    )
+    monkeypatch.setattr(main.extractor, "extract", lambda **kwargs: (reply, "json_schema"))
+
+    upload(client, photo_bytes)
+    from app import db
+
+    with db.connect() as conn:
+        assert conn.execute("SELECT purchased_on FROM receipts").fetchone()[0] == "2025-03-04"
+
+
+def test_date_with_a_time_attached_is_still_read(client, photo_bytes, monkeypatch):
+    reply = json.dumps(
+        {"merchant": "Pret", "date": "17/09/2026 18:42", "date_format": "DMY",
+         "total": 4.2, "line_items": []}
+    )
+    monkeypatch.setattr(main.extractor, "extract", lambda **kwargs: (reply, "prompt"))
+
+    upload(client, photo_bytes)
+    from app import db
+
+    with db.connect() as conn:
+        assert conn.execute("SELECT purchased_on FROM receipts").fetchone()[0] == "2026-09-17"
+
+
 def test_missing_receipt_is_404(client):
     assert client.get("/receipts/999").status_code == 404
