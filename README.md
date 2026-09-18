@@ -8,7 +8,7 @@ LM Studio on localhost.
 
 ## Requirements
 
-- Python 3.11+
+- Python 3.11 or newer (3.12 / 3.13 are the smoothest — see the note below)
 - [LM Studio](https://lmstudio.ai) with a **vision** model loaded and its server
   started (Developer tab → Start Server, default `http://127.0.0.1:1234`)
 
@@ -21,6 +21,10 @@ LM Studio on localhost.
 That creates the virtualenv, installs the dependencies, copies `.env.example`
 to `.env` if you don't have one, and starts the app on
 http://127.0.0.1:8000. Re-running it just starts the app.
+
+It picks the newest of `python3.13`, `python3.12`, `python3.11` that you have,
+falling back to plain `python3`. Force a specific one with
+`PYTHON=python3.14 ./run.sh`.
 
 Prefer to do it by hand:
 
@@ -56,6 +60,23 @@ active in your shell, so `python` is a different interpreter from the one `pip
 install` wrote to. Check with `which python`; it should point inside `.venv`.
 Use `./run.sh`, or activate first with `source .venv/bin/activate`. Calling
 `.venv/bin/python -m app` works either way.
+
+**Pillow fails to build: `The headers or library files could not be found for
+jpeg`** — your Python is newer than Pillow's published wheels, so pip tried to
+compile it from source. The dependencies are declared as minimum versions
+rather than exact pins so pip can pick a release with a wheel for your
+interpreter, but a just-released Python can still get ahead of them. Either
+build the venv on an older interpreter:
+
+```bash
+rm -rf .venv && PYTHON=python3.12 ./run.sh
+```
+
+or install the C libraries so the source build succeeds:
+
+```bash
+brew install libjpeg zlib libtiff webp     # macOS
+```
 
 **"Could not reach LM Studio"** — the server isn't running. In LM Studio, go to
 the Developer tab and press Start Server, with a vision model loaded.
@@ -126,8 +147,8 @@ sqlite3 receipts.db "SELECT purchased_on, merchant, total FROM receipts ORDER BY
 ## Tests
 
 ```bash
-pip install pytest
-python -m pytest
+.venv/bin/pip install pytest
+.venv/bin/python -m pytest
 ```
 
 56 tests covering amount/date/time parsing, JSON recovery from messy model

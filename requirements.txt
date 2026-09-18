@@ -1,7 +1,11 @@
-fastapi==0.115.6
-uvicorn[standard]==0.34.0
-jinja2==3.1.5
-python-multipart==0.0.20
-httpx==0.28.1
-pillow==11.1.0
-python-dotenv==1.0.1
+# Floors, not exact pins: on a very new Python (3.14+) an old pinned version has
+# no prebuilt wheel, and pip falls back to compiling from source - which fails
+# unless you have libjpeg and friends installed. Letting pip pick the newest
+# release means it picks one that ships a wheel for your interpreter.
+fastapi>=0.115
+uvicorn>=0.34
+jinja2>=3.1
+python-multipart>=0.0.20
+httpx>=0.28
+pillow>=11.3
+python-dotenv>=1.0
