@@ -1,7 +1,18 @@
-"""Run with: python -m app"""
+"""Run with: ./run.sh  (or python -m app inside an activated virtualenv)"""
 import os
+import sys
 
-import uvicorn
+try:
+    import uvicorn
+except ModuleNotFoundError:
+    sys.exit(
+        f"Dependencies are missing from {sys.executable}.\n\n"
+        "The most likely cause is that the virtualenv is not active in this shell.\n"
+        "Either run ./run.sh, which handles it for you, or:\n\n"
+        "    source .venv/bin/activate\n"
+        "    pip install -r requirements.txt\n"
+        "    python -m app\n"
+    )
 
 if __name__ == "__main__":
     uvicorn.run(

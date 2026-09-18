@@ -15,13 +15,21 @@ LM Studio on localhost.
 ## Setup
 
 ```bash
+./run.sh
+```
+
+That creates the virtualenv, installs the dependencies, copies `.env.example`
+to `.env` if you don't have one, and starts the app on
+http://127.0.0.1:8000. Re-running it just starts the app.
+
+Prefer to do it by hand:
+
+```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env          # then check LMSTUDIO_MODEL matches your loaded model
 python -m app
 ```
-
-Open http://127.0.0.1:8000.
 
 Visit **/models** to see exactly what LM Studio is serving; paste the right
 identifier into `LMSTUDIO_MODEL` in `.env` and restart. A text-only model will
@@ -40,6 +48,21 @@ reject the image, so make sure it's a vision one.
 
 The detail page flags receipts where the line items don't add up to the stated
 total — the most common way a local model gets a receipt wrong.
+
+## Troubleshooting
+
+**`ModuleNotFoundError: No module named 'uvicorn'`** — the virtualenv isn't
+active in your shell, so `python` is a different interpreter from the one `pip
+install` wrote to. Check with `which python`; it should point inside `.venv`.
+Use `./run.sh`, or activate first with `source .venv/bin/activate`. Calling
+`.venv/bin/python -m app` works either way.
+
+**"Could not reach LM Studio"** — the server isn't running. In LM Studio, go to
+the Developer tab and press Start Server, with a vision model loaded.
+
+**The model answers but nothing gets extracted** — open *What the model
+returned* on the detail page to see the raw reply. A text-only model will say
+it cannot see an image; check `/models` and pick a vision one.
 
 ## Configuration
 
